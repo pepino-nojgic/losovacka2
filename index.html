@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="cs" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Losovač žáků v4</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'Segoe UI', 'Roboto', 'sans-serif']
+          },
+          colors: {
+            accent: '#1f7aec'
+          }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-gray-100 text-slate-900 antialiased dark:bg-slate-900 dark:text-slate-100">
+  <header class="border-b border-slate-200 bg-white/70 backdrop-blur dark:border-slate-700 dark:bg-slate-900/70">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4">
+      <div>
+        <h1 class="text-2xl font-semibold">Losovač žáků v4</h1>
+        <p class="text-sm text-slate-600 dark:text-slate-400">Spusť lokální server (např. <code>npx serve</code>) pro plnou funkčnost PWA &amp; OCR.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <label for="classKey" class="text-sm font-medium">Klíč třídy</label>
+        <input id="classKey" name="classKey" type="text" class="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 dark:border-slate-600 dark:bg-slate-800" autocomplete="off" aria-describedby="classKeyHint">
+        <span id="classKeyHint" class="text-xs text-slate-500 dark:text-slate-400">Slouží pro uložení dat.</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto grid min-h-[calc(100vh-8rem)] max-w-6xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[2fr,1fr]" id="app" data-app-main>
+    <section aria-labelledby="wheelHeading" class="flex flex-col gap-6">
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center justify-between">
+          <h2 id="wheelHeading" class="text-lg font-semibold">Losovací kolo</h2>
+          <div class="flex items-center gap-2">
+            <button id="themeToggle" class="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60">
+              <span aria-hidden="true">🌓</span>
+              <span>Přepnout režim</span>
+            </button>
+          </div>
+        </div>
+        <div class="mt-4 grid gap-4 md:grid-cols-2">
+          <div class="relative flex items-center justify-center">
+            <div id="wheelContainer" class="relative flex h-64 w-64 items-center justify-center motion-reduce:hidden">
+              <svg viewBox="0 0 300 300" class="h-full w-full" role="img" aria-label="Losovací kolo" xmlns="http://www.w3.org/2000/svg">
+                <g id="wheelSegments" transform="rotate(0 150 150)"></g>
+                <circle cx="150" cy="150" r="20" class="fill-white stroke-slate-300 dark:fill-slate-800 dark:stroke-slate-600" />
+              </svg>
+              <div class="pointer-events-none absolute inset-0 flex items-start justify-center pt-4" aria-hidden="true">
+                <span class="inline-flex h-6 w-6 -translate-y-2 rotate-180 items-center justify-center rounded-full bg-accent text-white shadow">▲</span>
+              </div>
+            </div>
+            <div class="hidden w-full flex-col gap-2 motion-reduce:flex" id="listHighlightFallback">
+              <p class="text-sm text-slate-500 dark:text-slate-400">Kolo je skryté kvůli nastavení sníženého pohybu. Výherce se zvýrazní v seznamu – změňte volbu v Nastavení, pokud chcete kolo zobrazit.</p>
+              <ul id="highlightList" class="space-y-1 text-sm"></ul>
+            </div>
+          </div>
+          <div class="flex flex-col gap-3">
+            <div>
+              <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Aktuální výherce</p>
+              <p id="winnerStatus" role="status" aria-live="polite" class="mt-1 min-h-[2.5rem] rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-lg font-semibold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"></p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <button id="drawBtn" class="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 font-medium text-white shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 disabled:opacity-50 disabled:pointer-events-none" data-hotkey="Enter/Z">
+                🎲 Losovat (Enter/Z)
+              </button>
+              <button id="stopBtn" class="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60">
+                ⏹️ Zastavit
+              </button>
+              <button id="resetHistoryBtn" class="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60" data-hotkey="R">
+                ♻️ Reset historie (R)
+              </button>
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+              Zkratky fungují pouze mimo vstupní pole.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <section aria-labelledby="listHeading" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800" data-lock-zone>
+        <div class="flex items-center justify-between">
+          <h2 id="listHeading" class="text-lg font-semibold">Seznam žáků</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Zaškrtněte nepřítomné.</p>
+        </div>
+        <ul id="namesList" class="mt-4 space-y-2" aria-describedby="namesHelp"></ul>
+        <p id="namesHelp" class="sr-only">Zaškrtnutím označíte žáka jako nepřítomného. Do losování vstupují pouze přítomní.</p>
+      </section>
+    </section>
+
+    <aside aria-labelledby="asideHeading" class="flex flex-col gap-6" data-lock-zone>
+      <h2 id="asideHeading" class="sr-only">Vstup &amp; nastavení &amp; historie</h2>
+      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="inputHeading">
+        <h3 id="inputHeading" class="text-lg font-semibold">Přidání žáků</h3>
+        <label for="namesInput" class="sr-only">Zadejte jména, jedno na řádek</label>
+        <textarea id="namesInput" class="mt-3 h-32 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 dark:border-slate-600 dark:bg-slate-900" placeholder="Jan Novák&#10;Eva Černá"></textarea>
+        <div class="mt-3 flex flex-wrap gap-3">
+          <button id="addNamesBtn" class="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 font-medium text-white shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60">
+            ➕ Přidat
+          </button>
+          <button id="importJsonBtn" class="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60">
+            📥 Import JSON
+          </button>
+          <button id="exportJsonBtn" class="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60">
+            📤 Export JSON
+          </button>
+          <button id="ocrBtn" class="inline-flex items-center gap-2 rounded-lg px-4 py-2 font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60">
+            📷 Import z obrázku
+          </button>
+          <input type="file" id="jsonFileInput" accept="application/json" class="sr-only">
+          <input type="file" id="ocrFileInput" accept="image/*" class="sr-only">
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="settingsHeading">
+        <h3 id="settingsHeading" class="text-lg font-semibold">Nastavení</h3>
+        <div class="mt-4 space-y-4">
+          <div class="flex items-center justify-between gap-4">
+            <label for="spinDuration" class="text-sm font-medium">Délka točení (ms)</label>
+            <input type="number" id="spinDuration" min="500" max="10000" step="100" class="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 dark:border-slate-600 dark:bg-slate-900">
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <label for="motionMode" class="text-sm font-medium">Reduced motion</label>
+            <select id="motionMode" class="w-40 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 dark:border-slate-600 dark:bg-slate-900">
+              <option value="auto">Automaticky</option>
+              <option value="on">Zapnuto</option>
+              <option value="off">Vypnuto</option>
+            </select>
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <label for="themeMode" class="text-sm font-medium">Motiv</label>
+            <select id="themeMode" class="w-40 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 dark:border-slate-600 dark:bg-slate-900">
+              <option value="auto">Automaticky</option>
+              <option value="light">Světlý</option>
+              <option value="dark">Tmavý</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-800" aria-labelledby="historyHeading">
+        <div class="flex items-center justify-between">
+          <h3 id="historyHeading" class="text-lg font-semibold">Historie losování</h3>
+          <button id="toggleHistory" class="inline-flex items-center gap-2 rounded-lg px-3 py-1 text-sm font-medium shadow-sm transition hover:opacity-90 focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60" aria-expanded="true" aria-controls="historyList">
+            Rozbalit/Sbalit
+          </button>
+        </div>
+        <ul id="historyList" class="mt-4 space-y-2" role="list"></ul>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="border-t border-slate-200 bg-white/70 py-4 text-center text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900/70 dark:text-slate-400">
+    <p>&copy; <span id="year"></span> Losovač žáků v4. Offline režim vyžaduje instalaci PWA.</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
