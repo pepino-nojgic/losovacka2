@@ -1,0 +1,50 @@
+/* styles.css – jen speciální animace kola, drobnosti mimo Tailwind */
+:root {
+  color-scheme: light dark;
+}
+
+#wheelSegments {
+  transform-origin: 50% 50%;
+  transition: transform 0.6s ease-out;
+}
+
+.wheel-label {
+  fill: #f8fafc;
+  font-size: 12px;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.dark .wheel-label {
+  fill: #e2e8f0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #wheelSegments {
+    transition: none !important;
+  }
+}
+
+body[data-motion-preference="off"] #wheelContainer {
+  display: flex !important;
+}
+
+body[data-motion-preference="off"] #listHighlightFallback {
+  display: none !important;
+}
+
+body[data-motion-preference="on"] #wheelContainer {
+  display: none !important;
+}
+
+body[data-motion-preference="on"] #listHighlightFallback {
+  display: flex !important;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 122, 236, 0.35);
+}
