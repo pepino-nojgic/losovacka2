@@ -1,8 +1,8 @@
 [build]
-command = "echo Skipping build"
+command = ""
 publish = "."
 
 [[headers]]
 for = "/index.html"
-[headers.values]
-Content-Type = "text/html; charset=UTF-8"
+  [headers.values]
+  Content-Type = "text/html; charset=UTF-8"
