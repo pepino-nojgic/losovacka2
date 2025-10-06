@@ -296,11 +296,11 @@ const render = (() => {
       span.textContent = name.raw;
       span.title = name.raw;
       if (selectedKey && selectedKey === name.key) {
-        span.classList.add('text-accent');
+        span.classList.add('text-blue-600');
       }
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.className = 'h-4 w-4 rounded border-slate-300 text-accent focus-visible:outline-none focus-visible:ring focus-visible:ring-accent/60 dark:border-slate-600';
+      checkbox.className = 'h-4 w-4 rounded border-slate-300 text-blue-600 focus-visible:outline-none focus-visible:ring focus-visible:ring-blue-500/60 dark:border-slate-600';
       checkbox.id = `absent-${name.key}`;
       checkbox.checked = absentKeys.has(name.key);
       checkbox.dataset.key = name.key;
@@ -354,18 +354,18 @@ const render = (() => {
   function highlightResult(key) {
     highlightList.querySelectorAll('[data-key]').forEach((el) => {
       if (el.dataset.key === key) {
-        el.classList.add('bg-accent/20', 'text-accent');
+        el.classList.add('bg-blue-500/20', 'text-blue-600');
       } else {
-        el.classList.remove('bg-accent/20', 'text-accent');
+        el.classList.remove('bg-blue-500/20', 'text-blue-600');
       }
     });
     namesList.querySelectorAll('li').forEach((li) => {
       const span = li.querySelector('span.truncate');
       if (!span) return;
       if (li.dataset.key === key) {
-        span.classList.add('text-accent');
+        span.classList.add('text-blue-600');
       } else {
-        span.classList.remove('text-accent');
+        span.classList.remove('text-blue-600');
       }
     });
   }
