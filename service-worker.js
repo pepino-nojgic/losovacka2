@@ -1,5 +1,5 @@
 // service-worker.js
-const CACHE_NAME = 'losovac-v4-static-v1';
+const CACHE_NAME = 'losovac-v4-static-v2';
 const ASSETS = ['./', './index.html', './app.js', './styles.css', './manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

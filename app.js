@@ -584,6 +584,7 @@ const ui = (() => {
     spinDuration.value = settings.spinMs;
     motionMode.value = settings.reducedMotionMode;
     themeMode.value = settings.theme;
+    applyMotionPreference(settings.reducedMotionMode);
     applyTheme(settings.theme);
   }
 
@@ -599,6 +600,18 @@ const ui = (() => {
       } else {
         root.classList.remove('dark');
       }
+    }
+  }
+
+  function applyMotionPreference(mode) {
+    const body = document.body;
+    if (!body) return;
+    if (mode === 'on') {
+      body.dataset.motionPreference = 'on';
+    } else if (mode === 'off') {
+      body.dataset.motionPreference = 'off';
+    } else {
+      delete body.dataset.motionPreference;
     }
   }
 
@@ -779,7 +792,9 @@ const ui = (() => {
   }
 
   function handleMotionModeChange(event) {
-    state.setSettings({ reducedMotionMode: event.target.value });
+    const value = event.target.value;
+    state.setSettings({ reducedMotionMode: value });
+    applyMotionPreference(value);
   }
 
   function handleThemeModeChange(event) {

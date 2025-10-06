@@ -25,6 +25,22 @@
   }
 }
 
+body[data-motion-preference="off"] #wheelContainer {
+  display: flex !important;
+}
+
+body[data-motion-preference="off"] #listHighlightFallback {
+  display: none !important;
+}
+
+body[data-motion-preference="on"] #wheelContainer {
+  display: none !important;
+}
+
+body[data-motion-preference="on"] #listHighlightFallback {
+  display: flex !important;
+}
+
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
