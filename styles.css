@@ -25,20 +25,22 @@
   }
 }
 
-body[data-motion-preference="off"] #wheelContainer {
-  display: flex !important;
+/* Motion preference overrides - higher specificity without !important */
+body[data-motion-preference="off"] #wheelContainer.relative {
+  display: flex;
 }
 
-body[data-motion-preference="off"] #listHighlightFallback {
-  display: none !important;
+body[data-motion-preference="off"] #listHighlightFallback.hidden {
+  display: none;
 }
 
-body[data-motion-preference="on"] #wheelContainer {
-  display: none !important;
+body[data-motion-preference="on"] #wheelContainer.relative {
+  display: none;
 }
 
-body[data-motion-preference="on"] #listHighlightFallback {
-  display: flex !important;
+body[data-motion-preference="on"] #listHighlightFallback.hidden {
+  display: flex;
+  flex-direction: column;
 }
 
 button:focus-visible,

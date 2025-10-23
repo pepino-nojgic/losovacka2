@@ -37,11 +37,8 @@ const utils = {
       const clean = raw.normalize('NFC').replace(/\s+/g, ' ').trim();
       if (!clean) continue;
       const key = utils.createKey(clean);
-      if (map.has(key)) {
-        map.set(key, { raw: clean, key });
-      } else {
-        map.set(key, { raw: clean, key });
-      }
+      // Update or add - new raw value always overwrites (allows fixing typos)
+      map.set(key, { raw: clean, key });
     }
     return Array.from(map.values());
   },
@@ -169,14 +166,19 @@ const storage = (() => {
   function parse(json) {
     try {
       const parsed = JSON.parse(json);
-      if (typeof parsed !== 'object' || parsed === null) return null;
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('Soubor neobsahuje platná JSON data (očekáván objekt).');
+      }
       if (parsed.version !== APP_VERSION) {
-        throw new Error('Nepodporovaná verze souboru.');
+        throw new Error(`Nepodporovaná verze souboru (očekávána verze ${APP_VERSION}, nalezena ${parsed.version ?? 'žádná'}).`);
       }
       return migrate(parsed);
     } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error('Soubor obsahuje neplatnou JSON syntaxi. Zkontrolujte, zda je soubor správný.');
+      }
       console.error(error);
-      throw new Error('Soubor se nepodařilo načíst.');
+      throw error;
     }
   }
 
@@ -498,10 +500,15 @@ const ocr = (() => {
   URL.revokeObjectURL(workerUrl);
 
   const callbacks = new Map();
+  const OCR_TIMEOUT_MS = 60000; // 60 seconds
+
   worker.addEventListener('message', (event) => {
     const { id, status, text, message } = event.data;
     const callback = callbacks.get(id);
     if (!callback) return;
+    if (callback.timeoutId) {
+      clearTimeout(callback.timeoutId);
+    }
     if (status === 'done') {
       callback.resolve(text);
     } else {
@@ -510,12 +517,38 @@ const ocr = (() => {
     callbacks.delete(id);
   });
 
+  worker.addEventListener('error', (error) => {
+    console.error('OCR Worker error:', error);
+    // Reject all pending callbacks
+    for (const [id, callback] of callbacks.entries()) {
+      if (callback.timeoutId) {
+        clearTimeout(callback.timeoutId);
+      }
+      callback.reject(new Error('OCR worker selhal. Zkuste stránku znovu načíst.'));
+    }
+    callbacks.clear();
+  });
+
   return {
     recognize(imageDataUrl) {
       const id = crypto.randomUUID();
       return new Promise((resolve, reject) => {
-        callbacks.set(id, { resolve, reject });
-        worker.postMessage({ id, image: imageDataUrl });
+        const timeoutId = setTimeout(() => {
+          const callback = callbacks.get(id);
+          if (callback) {
+            callbacks.delete(id);
+            reject(new Error('OCR vypršel časový limit (60s). Zkuste menší obrázek.'));
+          }
+        }, OCR_TIMEOUT_MS);
+
+        callbacks.set(id, { resolve, reject, timeoutId });
+        try {
+          worker.postMessage({ id, image: imageDataUrl });
+        } catch (error) {
+          clearTimeout(timeoutId);
+          callbacks.delete(id);
+          reject(new Error('Nepodařilo se odeslat obrázek do OCR: ' + error.message));
+        }
       });
     }
   };
@@ -547,6 +580,7 @@ const ui = (() => {
   let currentReduced = mediaReduced.matches;
   let lastWinnerKey = null;
   let isHydrating = true;
+  let isDrawing = false;
 
   function handleStateChange(snapshot, presentNames) {
     classKeyInput.value = snapshot.classKey;
@@ -660,10 +694,17 @@ const ui = (() => {
   }
 
   async function handleDraw() {
-    if (wheel.isSpinning()) return;
+    // Prevent double-click and concurrent draws
+    if (isDrawing || wheel.isSpinning()) return;
+    isDrawing = true;
+
     const snapshot = state.getState();
     const present = snapshot.names.filter((n) => !snapshot.absentKeys.has(n.key));
-    if (present.length === 0) return;
+    if (present.length === 0) {
+      isDrawing = false;
+      return;
+    }
+
     const index = rng.index(present.length);
     const reduceMotion = shouldReduceMotion(snapshot.settings);
     lockInteractions(true);
@@ -672,6 +713,7 @@ const ui = (() => {
       selected = await wheel.spinTo(index, snapshot.settings.spinMs, reduceMotion);
     } finally {
       lockInteractions(false);
+      isDrawing = false;
     }
     if (!selected) return;
     lastWinnerKey = selected.key;
@@ -694,6 +736,14 @@ const ui = (() => {
     if (!target.dataset.key) return;
     const key = target.dataset.key;
     const isAbsent = target.checked;
+    // Immediate UI update for better responsiveness
+    const li = target.closest('li');
+    if (li) {
+      const statusSpan = li.querySelector('span.text-xs');
+      if (statusSpan) {
+        statusSpan.textContent = isAbsent ? 'Nepřítomen' : 'Přítomen';
+      }
+    }
     state.toggleAbsent(key, isAbsent);
   }
 
@@ -704,6 +754,16 @@ const ui = (() => {
   function handleJsonFileChange(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
+    if (file.size === 0) {
+      alert('Soubor je prázdný. Vyberte platný JSON soubor.');
+      jsonFileInput.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Soubor je příliš velký (max 5 MB).');
+      jsonFileInput.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -713,9 +773,15 @@ const ui = (() => {
         state.setClassKey(payload.classKey);
         state.updateFromStorage(payload);
         isHydrating = false;
+        alert(`Import úspěšný! Načteno ${payload.names.length} žáků.`);
       } catch (error) {
-        alert(error.message);
+        alert('Chyba při importu: ' + error.message);
+      } finally {
+        jsonFileInput.value = '';
       }
+    };
+    reader.onerror = () => {
+      alert('Chyba při čtení souboru. Zkuste to prosím znovu.');
       jsonFileInput.value = '';
     };
     reader.readAsText(file);
@@ -760,23 +826,41 @@ const ui = (() => {
   function handleOcrFileChange(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
+    // Set loading state
+    const originalText = ocrBtn.textContent;
+    ocrBtn.textContent = '⏳ Zpracovávám obrázek...';
+    ocrBtn.disabled = true;
+    ocrBtn.setAttribute('aria-busy', 'true');
+
+    const resetLoadingState = () => {
+      ocrBtn.textContent = originalText;
+      ocrBtn.disabled = false;
+      ocrBtn.removeAttribute('aria-busy');
+      ocrFileInput.value = '';
+    };
+
     const image = new Image();
     image.onload = async () => {
       try {
         const dataUrl = preprocessImage(image);
         const text = await ocr.recognize(dataUrl);
         const raw = utils.sanitizeRawInput(text);
-        const snapshot = state.getState();
-        const merged = utils.mergeNames(snapshot.names, raw);
-        state.setNames(merged);
+        if (raw.length === 0) {
+          alert('Z obrázku se nepodařilo rozpoznat žádný text. Zkuste jiný obrázek.');
+        } else {
+          const snapshot = state.getState();
+          const merged = utils.mergeNames(snapshot.names, raw);
+          state.setNames(merged);
+        }
       } catch (error) {
-        alert(error.message);
+        alert('Chyba při rozpoznávání textu: ' + error.message);
+      } finally {
+        resetLoadingState();
       }
-      ocrFileInput.value = '';
     };
     image.onerror = () => {
       alert('Obrázek se nepodařilo načíst.');
-      ocrFileInput.value = '';
+      resetLoadingState();
     };
     const reader = new FileReader();
     reader.onload = () => {
@@ -788,7 +872,13 @@ const ui = (() => {
   function handleSpinDurationChange(event) {
     const value = Number.parseInt(event.target.value, 10);
     if (Number.isNaN(value)) return;
-    state.setSettings({ spinMs: value });
+    // Clamp value between 500 and 10000
+    const clamped = Math.max(500, Math.min(10000, value));
+    if (clamped !== value) {
+      // Reset input to clamped value if out of range
+      event.target.value = clamped;
+    }
+    state.setSettings({ spinMs: clamped });
   }
 
   function handleMotionModeChange(event) {
@@ -813,14 +903,15 @@ const ui = (() => {
   function handleClassKeyChange(event) {
     const key = event.target.value.trim() || DEFAULT_CLASS_KEY;
     isHydrating = true;
+    // Clear current winner before loading new class
+    lastWinnerKey = null;
+    render.winner(null);
     state.setClassKey(key);
     const stored = storage.load(key);
     if (stored) {
       lastWinnerKey = stored.history.length ? stored.history[0].key : null;
       state.updateFromStorage(stored);
     } else {
-      lastWinnerKey = null;
-      render.winner(null);
       state.updateFromStorage({
         names: [],
         absentKeys: [],
